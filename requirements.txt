@@ -1,5 +1,6 @@
 torch
 torchvision
 kagglehub
-scikit-learn
+tqdmscikit-learn
 matplotlib
+tqdm
