@@ -101,5 +101,4 @@ def build_dataloaders(path):
 
 
 if __name__ == "__main__":
-    # load_dataset("data")
-    build_dataloaders("data/fast-food-classification-dataset/Fast Food Classification V2")
+    load_dataset("data")
