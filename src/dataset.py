@@ -4,3 +4,4 @@ import kagglehub
 path = kagglehub.dataset_download("utkarshsaxenadn/fast-food-classification-dataset")
 
 print("Path to dataset files:", path)
+
