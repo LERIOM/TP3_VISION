@@ -6,30 +6,50 @@ from torchvision import models, transforms
 from torchvision.models import ResNet50_Weights
 
 from dataset import build_dataloaders, load_dataset
+from metricstransfert import (
+    build_test_metrics,
+    evaluate_model,
+    save_classification_report,
+    save_learning_curves,
+)
 
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+DEVICE = get_device()
 EPOCHS = 5
 LR = 1e-3
 MODEL_PATH = "resnet50_transfer.pth"
+LOG_EVERY = 10
 
 
-# Construit les transformations d'images attendues par ResNet50.
+# Construit les transformations compatibles avec les poids pré-entraînés de ResNet50.
 def build_resnet50_transforms(weights: ResNet50_Weights):
+    weights_transforms = weights.transforms()
     normalize = transforms.Normalize(
-        mean=weights.transforms().mean,
-        std=weights.transforms().std,
+        mean=weights_transforms.mean,
+        std=weights_transforms.std,
     )
 
     train_transform = transforms.Compose([
-        transforms.Resize((128, 128)),
+        transforms.Lambda(lambda image: image.convert("RGB")),
+        transforms.Resize(256),
+        transforms.RandomResizedCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize,
     ])
 
     eval_transform = transforms.Compose([
-        transforms.Resize((128, 128)),
+        transforms.Lambda(lambda image: image.convert("RGB")),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         normalize,
     ])
@@ -75,7 +95,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer):
     correct = 0
     total = 0
 
-    for images, labels in train_loader:
+    for batch_index, (images, labels) in enumerate(train_loader, start=1):
         images, labels = images.to(DEVICE), labels.to(DEVICE)
 
         optimizer.zero_grad()
@@ -89,26 +109,12 @@ def train_one_epoch(model, train_loader, criterion, optimizer):
         total += labels.size(0)
         correct += (preds == labels).sum().item()
 
+        if batch_index == 1 or batch_index % LOG_EVERY == 0 or batch_index == len(train_loader):
+            print(f"Batch {batch_index}/{len(train_loader)} - Loss: {loss.item():.4f}")
+
+    average_loss = running_loss / len(train_loader) if len(train_loader) else 0.0
     train_acc = 100 * correct / total if total else 0.0
-    return running_loss, train_acc
-
-
-# Calcule la précision du modèle sur un DataLoader donné.
-def evaluate_model(model, data_loader):
-    model.eval()
-    correct = 0
-    total = 0
-
-    with torch.no_grad():
-        for images, labels in data_loader:
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
-            outputs = model(images)
-            _, preds = torch.max(outputs, 1)
-
-            total += labels.size(0)
-            correct += (preds == labels).sum().item()
-
-    return 100 * correct / total if total else 0.0
+    return average_loss, train_acc
 
 
 # Sauvegarde les poids du modèle entraîné sur disque.
@@ -120,17 +126,54 @@ def save_model(model: nn.Module, model_path: str = MODEL_PATH):
 # Orchestre le chargement des données, l'entraînement, l'évaluation et la sauvegarde.
 def main():
     weights = ResNet50_Weights.DEFAULT
-    train_loader, _, test_loader = prepare_dataloaders("data", weights)
-    num_classes = len(train_loader.dataset.classes)
+    train_loader, val_loader, test_loader = prepare_dataloaders("data", weights)
+    class_names = train_loader.dataset.classes
+    num_classes = len(class_names)
     model = build_transfer_model(num_classes, weights)
     criterion, optimizer = build_training_components(model)
+    history = {
+        "train_loss": [],
+        "train_acc": [],
+        "val_loss": [],
+        "val_acc": [],
+    }
+
+    print(f"Device: {DEVICE}")
+    print(f"Train batches: {len(train_loader)}")
+    print(f"Validation batches: {len(val_loader)}")
+    print(f"Test batches: {len(test_loader)}")
 
     for epoch in range(EPOCHS):
-        running_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer)
-        print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {running_loss:.4f} - Train Acc: {train_acc:.2f}%")
+        print(f"Starting epoch {epoch+1}/{EPOCHS}")
+        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer)
+        val_loss, val_acc = evaluate_model(model, val_loader, criterion, DEVICE)
+        history["train_loss"].append(train_loss)
+        history["train_acc"].append(train_acc)
+        history["val_loss"].append(val_loss)
+        history["val_acc"].append(val_acc)
+        print(
+            f"Epoch {epoch+1}/{EPOCHS} - Loss: {train_loss:.4f} "
+            f"- Train Acc: {train_acc:.2f}% - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.2f}%"
+        )
 
-    test_acc = evaluate_model(model, test_loader)
+    test_loss, test_acc, test_labels, test_predictions = evaluate_model(
+        model,
+        test_loader,
+        criterion,
+        DEVICE,
+        return_predictions=True,
+    )
+    global_accuracy, kappa, report = build_test_metrics(test_labels, test_predictions, class_names)
+
+    print(f"Test Loss: {test_loss:.4f}")
     print(f"Test Accuracy: {test_acc:.2f}%")
+    print(f"Global Accuracy: {global_accuracy:.4f}")
+    print(f"Cohen Kappa: {kappa:.4f}")
+    print("Classification Report:")
+    print(report)
+
+    save_learning_curves(history)
+    save_classification_report(report)
     save_model(model)
 
 
