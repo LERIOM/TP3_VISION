@@ -77,9 +77,21 @@ def build_dataloaders(path):
             f"Expected Train/Valid/Test directories under '{dataset_root}', missing: {missing}"
         )
 
-    train_dataset = ImageFolder(root=str(split_dirs["train"]))
-    validation_dataset = ImageFolder(root=str(split_dirs["validation"]))
-    test_dataset = ImageFolder(root=str(split_dirs["test"]))
+    train_transforms = transforms.Compose([
+        transforms.Resize((128, 128)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(10),
+        transforms.ToTensor(),
+    ])
+
+    validation_transforms = transforms.Compose([
+        transforms.Resize((128, 128)),
+        transforms.ToTensor(),
+    ])
+
+    train_dataset = ImageFolder(root=str(split_dirs["train"]), transform=train_transforms)
+    validation_dataset = ImageFolder(root=str(split_dirs["validation"]), transform=validation_transforms)
+    test_dataset = ImageFolder(root=str(split_dirs["test"]), transform=train_transforms)
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     validation_loader = DataLoader(validation_dataset, batch_size=32, shuffle=False)
