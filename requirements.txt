@@ -1,3 +1,5 @@
 torch
 torchvision
 kagglehub
+scikit-learn
+matplotlib
