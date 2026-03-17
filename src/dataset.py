@@ -63,7 +63,7 @@ def load_dataset(download_dir="data", force_download=False):
     return str(path)
 
 
-def build_dataloaders(path):
+def build_dataloaders(path, batch_size=32):
     dataset_root = _find_dataset_root(path)
     split_dirs = {
         split_name: _find_split_dir(dataset_root, aliases)
@@ -77,27 +77,37 @@ def build_dataloaders(path):
             f"Expected Train/Valid/Test directories under '{dataset_root}', missing: {missing}"
         )
 
-    train_transforms = transforms.Compose([
-        transforms.Resize((128, 128)),
+    train_transforms_early = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(20),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        transforms.ToTensor(),
+    ])
+
+    train_transforms_late = transforms.Compose([
+        transforms.Resize((256, 256)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
         transforms.ToTensor(),
     ])
 
     validation_transforms = transforms.Compose([
-        transforms.Resize((128, 128)),
+        transforms.Resize((256, 256)),
         transforms.ToTensor(),
     ])
+    early_train_dataset = ImageFolder(root=str(split_dirs["train"]), transform=train_transforms_late)
+    late_train_dataset = ImageFolder(root=str(split_dirs["train"]), transform=train_transforms_early)
 
-    train_dataset = ImageFolder(root=str(split_dirs["train"]), transform=train_transforms)
     validation_dataset = ImageFolder(root=str(split_dirs["validation"]), transform=validation_transforms)
-    test_dataset = ImageFolder(root=str(split_dirs["test"]), transform=train_transforms)
+    test_dataset = ImageFolder(root=str(split_dirs["test"]), transform=validation_transforms)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    validation_loader = DataLoader(validation_dataset, batch_size=32, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    early_train_loader = DataLoader(early_train_dataset, batch_size=batch_size, shuffle=True)
+    late_train_loader = DataLoader(late_train_dataset, batch_size=batch_size, shuffle=True)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    return train_loader, validation_loader, test_loader
+    return early_train_loader, late_train_loader, validation_loader, test_loader
 
 
 if __name__ == "__main__":
