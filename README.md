@@ -3,6 +3,41 @@
 Antoine RIOM et Julien EXCOFFIER  
 21 mars 2026
 
+## Utilisation (démarrage rapide)
+
+### 1) Créer et activer un environnement virtuel
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 2) Installer les dépendances
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 3) Lancer les expériences (comparaison des deux approches)
+
+```bash
+python3 src/main.py --runs 5 --batch-size 128 --num-workers 8 --transfer-epochs 15 --custom-epochs 15 --custom-model resnet_like --seed-base 42
+```
+
+### 4) Ce que permet le projet
+
+- entraîner et comparer un modèle **ResNet50 en transfert d’apprentissage** et un **CNN maison ResNet-like** ;
+- répéter les entraînements sur plusieurs seeds ;
+- générer les métriques (accuracy, kappa, rapports de classification) ;
+- sauvegarder les courbes d’apprentissage et résultats agrégés dans `output/`.
+
+### 5) Désactiver l’environnement virtuel
+
+```bash
+deactivate
+```
+
 ## Introduction
 
 Ce TP porte sur la comparaison de deux approches de classification
