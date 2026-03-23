@@ -23,7 +23,7 @@ def get_device():
 
 
 DEVICE = get_device()
-EPOCHS = 5
+EPOCHS = 10
 LR = 1e-3
 MODEL_PATH = "resnet50_transfer.pth"
 LOG_EVERY = 10
@@ -60,23 +60,12 @@ def build_resnet50_transforms(weights: ResNet50_Weights):
 # Charge le dataset et applique les transformations aux trois splits.
 def prepare_dataloaders(download_dir: str, weights: ResNet50_Weights):
     path = load_dataset(download_dir)
-    dataloaders = build_dataloaders(path)
     train_transform, eval_transform = build_resnet50_transforms(weights)
-
-    if len(dataloaders) == 3:
-        early_train_loader, val_loader, test_loader = dataloaders
-        late_train_loader = early_train_loader
-    elif len(dataloaders) == 4:
-        early_train_loader, late_train_loader, val_loader, test_loader = dataloaders
-    else:
-        raise ValueError(f"Unexpected number of dataloaders returned: {len(dataloaders)}")
-
-    early_train_loader.dataset.transform = train_transform
-    late_train_loader.dataset.transform = train_transform
-    val_loader.dataset.transform = eval_transform
-    test_loader.dataset.transform = eval_transform
-
-    return early_train_loader, late_train_loader, val_loader, test_loader
+    return build_dataloaders(
+        path,
+        train_transform=train_transform,
+        eval_transform=eval_transform,
+    )
 
 
 # Charge ResNet50 pré-entraîné et remplace la couche de classification finale.
@@ -135,8 +124,8 @@ def save_model(model: nn.Module, model_path: str = MODEL_PATH):
 # Orchestre le chargement des données, l'entraînement, l'évaluation et la sauvegarde.
 def main():
     weights = ResNet50_Weights.DEFAULT
-    early_train_loader, late_train_loader, val_loader, test_loader = prepare_dataloaders("data", weights)
-    class_names = early_train_loader.dataset.classes
+    train_loader, val_loader, test_loader = prepare_dataloaders("data", weights)
+    class_names = train_loader.dataset.classes
     num_classes = len(class_names)
     model = build_transfer_model(num_classes, weights)
     criterion, optimizer = build_training_components(model)
@@ -148,16 +137,13 @@ def main():
     }
 
     print(f"Device: {DEVICE}")
-    print(f"Train batches (early): {len(early_train_loader)}")
-    print(f"Train batches (late): {len(late_train_loader)}")
+    print(f"Train batches: {len(train_loader)}")
     print(f"Validation batches: {len(val_loader)}")
     print(f"Test batches: {len(test_loader)}")
 
     for epoch in range(EPOCHS):
-        active_train_loader = early_train_loader if epoch < max(1, EPOCHS // 2) else late_train_loader
-        phase = "early" if active_train_loader is early_train_loader else "late"
-        print(f"Starting epoch {epoch+1}/{EPOCHS} ({phase})")
-        train_loss, train_acc = train_one_epoch(model, active_train_loader, criterion, optimizer)
+        print(f"Starting epoch {epoch+1}/{EPOCHS}")
+        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer)
         val_loss, val_acc = evaluate_model(model, val_loader, criterion, DEVICE)
         history["train_loss"].append(train_loss)
         history["train_acc"].append(train_acc)

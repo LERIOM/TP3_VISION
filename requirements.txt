@@ -3,6 +3,5 @@ torchvision
 kagglehub
 tqdm
 matplotlib
-tqdmscikit-learn
-matplotlib
-tqdm
+numpy
+scikit-learn

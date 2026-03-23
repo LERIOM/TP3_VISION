@@ -1,7 +1,9 @@
+import os
 from pathlib import Path
 import shutil
 
 import kagglehub
+import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 from torchvision import transforms
@@ -63,7 +65,36 @@ def load_dataset(download_dir="data", force_download=False):
     return str(path)
 
 
-def build_dataloaders(path, batch_size=32):
+def build_default_transforms():
+    train_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(15),
+        transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.05),
+        transforms.ToTensor(),
+    ])
+
+    eval_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+    ])
+
+    return train_transform, eval_transform
+
+
+def _default_num_workers():
+    cpu_count = os.cpu_count() or 1
+    return max(1, min(8, cpu_count))
+
+
+def build_dataloaders(
+    path,
+    batch_size=32,
+    train_transform=None,
+    eval_transform=None,
+    num_workers=None,
+    pin_memory=None,
+):
     dataset_root = _find_dataset_root(path)
     split_dirs = {
         split_name: _find_split_dir(dataset_root, aliases)
@@ -77,37 +108,32 @@ def build_dataloaders(path, batch_size=32):
             f"Expected Train/Valid/Test directories under '{dataset_root}', missing: {missing}"
         )
 
-    train_transforms_early = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(20),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-        transforms.ToTensor(),
-    ])
+    if train_transform is None or eval_transform is None:
+        train_transform, eval_transform = build_default_transforms()
 
-    train_transforms_late = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(10),
-        transforms.ToTensor(),
-    ])
+    if num_workers is None:
+        num_workers = _default_num_workers()
 
-    validation_transforms = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.ToTensor(),
-    ])
-    early_train_dataset = ImageFolder(root=str(split_dirs["train"]), transform=train_transforms_late)
-    late_train_dataset = ImageFolder(root=str(split_dirs["train"]), transform=train_transforms_early)
+    if pin_memory is None:
+        pin_memory = torch.cuda.is_available()
 
-    validation_dataset = ImageFolder(root=str(split_dirs["validation"]), transform=validation_transforms)
-    test_dataset = ImageFolder(root=str(split_dirs["test"]), transform=validation_transforms)
+    train_dataset = ImageFolder(root=str(split_dirs["train"]), transform=train_transform)
+    validation_dataset = ImageFolder(root=str(split_dirs["validation"]), transform=eval_transform)
+    test_dataset = ImageFolder(root=str(split_dirs["test"]), transform=eval_transform)
 
-    early_train_loader = DataLoader(early_train_dataset, batch_size=batch_size, shuffle=True)
-    late_train_loader = DataLoader(late_train_dataset, batch_size=batch_size, shuffle=True)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    common_loader_kwargs = {
+        "batch_size": batch_size,
+        "num_workers": num_workers,
+        "pin_memory": pin_memory,
+    }
+    if num_workers > 0:
+        common_loader_kwargs["persistent_workers"] = True
 
-    return early_train_loader, late_train_loader, validation_loader, test_loader
+    train_loader = DataLoader(train_dataset, shuffle=True, **common_loader_kwargs)
+    validation_loader = DataLoader(validation_dataset, shuffle=False, **common_loader_kwargs)
+    test_loader = DataLoader(test_dataset, shuffle=False, **common_loader_kwargs)
+
+    return train_loader, validation_loader, test_loader
 
 
 if __name__ == "__main__":
