@@ -1,7 +1,5 @@
 import torch.nn as nn
 
-IMG_SIZE = 256
-
 class FastFoodClassifier(nn.Module):
     def __init__(self, num_classes):
         super().__init__()

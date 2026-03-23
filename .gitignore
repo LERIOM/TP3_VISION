@@ -6,6 +6,6 @@ __pycache__/
 *.pyd
 .cache/
 output/
-visualization/
-rapport/
 models/
+visualizations/
+rapport/
