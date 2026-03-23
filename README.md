@@ -187,7 +187,7 @@ le pré-entraînement ImageNet.
 ### Conditions communes
 
 Les expériences retenues pour ce rapport correspondent à la session du
-21 mars 2026, archivée dans `output/20260321_035423`. Les deux modèles
+21 mars 2026. Les deux modèles
 ont été entraînés avec le même script et avec la même séparation des
 données. Les principaux paramètres communs sont les suivants:
 
@@ -596,10 +596,6 @@ architecture pré-entraînée.
 Les expériences finales du rapport ont été générées avec:
 
 > `python3 src/main.py --runs 5 --batch-size 128 --num-workers 8 --transfer-epochs 15 --custom-epochs 15 --custom-model resnet_like --seed-base 42`
-
-La session utilisée ici est:
-
-> `output/20260321_035423`
 
 ## Rapports de classification moyens
 
